@@ -85,9 +85,9 @@ struct MemoryEditor
     int             OptMidColsCount;                            // = 8      // set to 0 to disable extra spacing between every mid-cols.
     int             OptAddrDigitsCount;                         // = 0      // number of addr digits to display (default calculated based on maximum displayed addr).
     ImU32           HighlightColor;                             //          // background color of highlighted bytes.
-    ImU16            (*ReadFn)(const ImU16* data, size_t off);    // = 0      // optional handler to read bytes.
+    ImU16           (*ReadFn)(const ImU16* data, size_t off);    // = 0      // optional handler to read bytes.
     void            (*WriteFn)(ImU16* data, size_t off, ImU16 d); // = 0      // optional handler to write bytes.
-    bool            (*HighlightFn)(const ImU16* data, size_t off);//= 0      // optional handler to return Highlight property (to support non-contiguous highlighting).
+    bool            (*HighlightFn)(void* usrdata, const ImU16* data, size_t off);//= 0      // optional handler to return Highlight property (to support non-contiguous highlighting).
 
     // [Internal State]
     bool            ContentsWidthChanged;
@@ -180,7 +180,7 @@ struct MemoryEditor
     }
 
     // Standalone Memory Editor window
-    void DrawWindow(const char* title, void* mem_data, size_t mem_size, size_t base_display_addr = 0x0000)
+    void DrawWindow(void* highlight_usrdata, const char* title, void* mem_data, size_t mem_size, size_t base_display_addr = 0x0000)
     {
         Sizes s;
         CalcSizes(s, mem_size, base_display_addr);
@@ -191,7 +191,7 @@ struct MemoryEditor
         {
             if (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows) && ImGui::IsMouseClicked(1))
                 ImGui::OpenPopup("context");
-            DrawContents(mem_data, mem_size, base_display_addr);
+            DrawContents(highlight_usrdata, mem_data, mem_size, base_display_addr);
             if (ContentsWidthChanged)
             {
                 CalcSizes(s, mem_size, base_display_addr);
@@ -202,7 +202,7 @@ struct MemoryEditor
     }
 
     // Memory Editor contents only
-    void DrawContents(void* mem_data_void, size_t mem_size, size_t base_display_addr = 0x0000)
+    void DrawContents(void* highlight_usrdata, void* mem_data_void, size_t mem_size, size_t base_display_addr = 0x0000)
     {
         if (Cols < 1)
             Cols = 1;
@@ -287,13 +287,13 @@ struct MemoryEditor
 
                 // Draw highlight
                 bool is_highlight_from_user_range = (addr >= HighlightMin && addr < HighlightMax);
-                bool is_highlight_from_user_func = (HighlightFn && HighlightFn(mem_data, addr));
+                bool is_highlight_from_user_func = (HighlightFn && HighlightFn(highlight_usrdata, mem_data, addr));
                 bool is_highlight_from_preview = (addr >= DataPreviewAddr && addr < DataPreviewAddr + preview_data_type_size);
                 if (is_highlight_from_user_range || is_highlight_from_user_func || is_highlight_from_preview)
                 {
                     ImVec2 pos = ImGui::GetCursorScreenPos();
                     float highlight_width = s.GlyphWidth * 4;
-                    bool is_next_byte_highlighted =  (addr + 1 < mem_size) && ((HighlightMax != (size_t)-1 && addr + 1 < HighlightMax) || (HighlightFn && HighlightFn(mem_data, addr + 1)));
+                    bool is_next_byte_highlighted =  (addr + 1 < mem_size) && ((HighlightMax != (size_t)-1 && addr + 1 < HighlightMax) || (HighlightFn && HighlightFn(highlight_usrdata, mem_data, addr + 1)));
                     if (is_next_byte_highlighted || (n + 1 == Cols))
                     {
                         highlight_width = s.HexCellWidth;
