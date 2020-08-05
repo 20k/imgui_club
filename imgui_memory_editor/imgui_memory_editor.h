@@ -3,7 +3,7 @@
 //
 // Right-click anywhere to access the Options menu!
 // You can adjust the keyboard repeat delay/rate in ImGuiIO.
-// The code assume a mono-space font for simplicity! 
+// The code assume a mono-space font for simplicity!
 // If you don't use the default font, use ImGui::PushFont()/PopFont() to switch to a mono-space font before caling this.
 //
 // Usage:
@@ -85,9 +85,9 @@ struct MemoryEditor
     int             OptMidColsCount;                            // = 8      // set to 0 to disable extra spacing between every mid-cols.
     int             OptAddrDigitsCount;                         // = 0      // number of addr digits to display (default calculated based on maximum displayed addr).
     ImU32           HighlightColor;                             //          // background color of highlighted bytes.
-    ImU8            (*ReadFn)(const ImU8* data, size_t off);    // = 0      // optional handler to read bytes.
-    void            (*WriteFn)(ImU8* data, size_t off, ImU8 d); // = 0      // optional handler to write bytes.
-    bool            (*HighlightFn)(const ImU8* data, size_t off);//= 0      // optional handler to return Highlight property (to support non-contiguous highlighting).
+    ImU16            (*ReadFn)(const ImU16* data, size_t off);    // = 0      // optional handler to read bytes.
+    void            (*WriteFn)(ImU16* data, size_t off, ImU16 d); // = 0      // optional handler to write bytes.
+    bool            (*HighlightFn)(const ImU16* data, size_t off);//= 0      // optional handler to return Highlight property (to support non-contiguous highlighting).
 
     // [Internal State]
     bool            ContentsWidthChanged;
@@ -164,7 +164,7 @@ struct MemoryEditor
                 s.AddrDigitsCount++;
         s.LineHeight = ImGui::GetTextLineHeight();
         s.GlyphWidth = ImGui::CalcTextSize("F").x + 1;                  // We assume the font is mono-space
-        s.HexCellWidth = (float)(int)(s.GlyphWidth * 2.5f);             // "FF " we include trailing space in the width to easily catch clicks everywhere
+        s.HexCellWidth = (float)(int)(s.GlyphWidth * 4.5f);             // "FF " we include trailing space in the width to easily catch clicks everywhere
         s.SpacingBetweenMidCols = (float)(int)(s.HexCellWidth * 0.25f); // Every OptMidColsCount columns we add a bit of extra spacing
         s.PosHexStart = (s.AddrDigitsCount + 2) * s.GlyphWidth;
         s.PosHexEnd = s.PosHexStart + (s.HexCellWidth * Cols);
@@ -207,7 +207,7 @@ struct MemoryEditor
         if (Cols < 1)
             Cols = 1;
 
-        ImU8* mem_data = (ImU8*)mem_data_void;
+        ImU16* mem_data = (ImU16*)mem_data_void;
         Sizes s;
         CalcSizes(s, mem_size, base_display_addr);
         ImGuiStyle& style = ImGui::GetStyle();
@@ -269,8 +269,8 @@ struct MemoryEditor
 
         const char* format_address = OptUpperCaseHex ? "%0*" _PRISizeT "X: " : "%0*" _PRISizeT "x: ";
         const char* format_data = OptUpperCaseHex ? "%0*" _PRISizeT "X" : "%0*" _PRISizeT "x";
-        const char* format_byte = OptUpperCaseHex ? "%02X" : "%02x";
-        const char* format_byte_space = OptUpperCaseHex ? "%02X " : "%02x ";
+        const char* format_byte = OptUpperCaseHex ? "%04X" : "%04x";
+        const char* format_byte_space = OptUpperCaseHex ? "%04X " : "%04x ";
 
         for (int line_i = clipper.DisplayStart; line_i < clipper.DisplayEnd; line_i++) // display only visible lines
         {
@@ -292,7 +292,7 @@ struct MemoryEditor
                 if (is_highlight_from_user_range || is_highlight_from_user_func || is_highlight_from_preview)
                 {
                     ImVec2 pos = ImGui::GetCursorScreenPos();
-                    float highlight_width = s.GlyphWidth * 2;
+                    float highlight_width = s.GlyphWidth * 4;
                     bool is_next_byte_highlighted =  (addr + 1 < mem_size) && ((HighlightMax != (size_t)-1 && addr + 1 < HighlightMax) || (HighlightFn && HighlightFn(mem_data, addr + 1)));
                     if (is_next_byte_highlighted || (n + 1 == Cols))
                     {
@@ -315,7 +315,7 @@ struct MemoryEditor
                         sprintf(AddrInputBuf, format_data, s.AddrDigitsCount, base_display_addr + addr);
                         sprintf(DataInputBuf, format_byte, ReadFn ? ReadFn(mem_data, addr) : mem_data[addr]);
                     }
-                    ImGui::PushItemWidth(s.GlyphWidth * 2);
+                    ImGui::PushItemWidth(s.GlyphWidth * 4);
                     struct UserData
                     {
                         // FIXME: We should have a way to retrieve the text edit cursor position more easily in the API, this is rather tedious. This is such a ugly mess we may be better off not using InputText() at all here.
@@ -330,11 +330,11 @@ struct MemoryEditor
                                 data->DeleteChars(0, data->BufTextLen);
                                 data->InsertChars(0, user_data->CurrentBufOverwrite);
                                 data->SelectionStart = 0;
-                                data->SelectionEnd = data->CursorPos = 2;
+                                data->SelectionEnd = data->CursorPos = 4;
                             }
                             return 0;
                         }
-                        char   CurrentBufOverwrite[3];  // Input
+                        char   CurrentBufOverwrite[5];  // Input
                         int    CursorPos;               // Output
                     };
                     UserData user_data;
@@ -347,7 +347,7 @@ struct MemoryEditor
                         DataEditingAddr = data_editing_addr_next = (size_t)-1;
                     DataEditingTakeFocus = false;
                     ImGui::PopItemWidth();
-                    if (user_data.CursorPos >= 2)
+                    if (user_data.CursorPos >= 4)
                         data_write = data_next = true;
                     if (data_editing_addr_next != (size_t)-1)
                         data_write = data_next = false;
@@ -355,23 +355,23 @@ struct MemoryEditor
                     if (data_write && sscanf(DataInputBuf, "%X", &data_input_value) == 1)
                     {
                         if (WriteFn)
-                            WriteFn(mem_data, addr, (ImU8)data_input_value);
+                            WriteFn(mem_data, addr, (ImU16)data_input_value);
                         else
-                            mem_data[addr] = (ImU8)data_input_value;
+                            mem_data[addr] = (ImU16)data_input_value;
                     }
                     ImGui::PopID();
                 }
                 else
                 {
                     // NB: The trailing space is not visible but ensure there's no gap that the mouse cannot click on.
-                    ImU8 b = ReadFn ? ReadFn(mem_data, addr) : mem_data[addr];
+                    ImU16 b = ReadFn ? ReadFn(mem_data, addr) : mem_data[addr];
 
                     if (OptShowHexII)
                     {
                         if ((b >= 32 && b < 128))
                             ImGui::Text(".%c ", b);
-                        else if (b == 0xFF && OptGreyOutZeroes)
-                            ImGui::TextDisabled("## ");
+                        else if (b == 0xFFFF && OptGreyOutZeroes)
+                            ImGui::TextDisabled("#### ");
                         else if (b == 0x00)
                             ImGui::Text("   ");
                         else
@@ -380,7 +380,7 @@ struct MemoryEditor
                     else
                     {
                         if (b == 0 && OptGreyOutZeroes)
-                            ImGui::TextDisabled("00 ");
+                            ImGui::TextDisabled("0000 ");
                         else
                             ImGui::Text(format_byte_space, b);
                     }
@@ -505,7 +505,7 @@ struct MemoryEditor
     void DrawPreviewLine(const Sizes& s, void* mem_data_void, size_t mem_size, size_t base_display_addr)
     {
         IM_UNUSED(base_display_addr);
-        ImU8* mem_data = (ImU8*)mem_data_void;
+        ImU16* mem_data = (ImU16*)mem_data_void;
         ImGuiStyle& style = ImGui::GetStyle();
         ImGui::AlignTextToFramePadding();
         ImGui::Text("Preview as:");
@@ -627,7 +627,7 @@ struct MemoryEditor
     }
 
     // [Internal]
-    void DrawPreviewData(size_t addr, const ImU8* mem_data, size_t mem_size, ImGuiDataType data_type, DataFormat data_format, char* out_buf, size_t out_buf_size) const
+    void DrawPreviewData(size_t addr, const ImU16* mem_data, size_t mem_size, ImGuiDataType data_type, DataFormat data_format, char* out_buf, size_t out_buf_size) const
     {
         uint8_t buf[8];
         size_t elem_size = DataTypeGetSize(data_type);
